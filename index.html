@@ -261,9 +261,9 @@
     <div class="person" id="personA" style="--c: #2563eb; --soft: #eff4ff">
       <div class="row">
         <span class="name"><span class="dot"></span> You</span>
-        <span class="pill"><span class="valA">20</span> min</span>
+        <span class="pill"><span class="valA">15</span> min</span>
       </div>
-      <input type="range" class="rangeA" min="15" max="60" step="5" value="20" />
+      <input type="range" class="rangeA" min="0" max="6" step="1" value="0" />
       <div class="modes" data-key="a">
         <button data-mode="approximated_transit" aria-pressed="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".5" fill="currentColor"/><circle cx="15.5" cy="14" r=".5" fill="currentColor"/></svg>
@@ -280,9 +280,9 @@
     <div class="person" id="personB" style="--c: #f97316; --soft: #fff4ec">
       <div class="row">
         <span class="name"><span class="dot"></span> Partner</span>
-        <span class="pill"><span class="valB">20</span> min</span>
+        <span class="pill"><span class="valB">15</span> min</span>
       </div>
-      <input type="range" class="rangeB" min="15" max="60" step="5" value="20" />
+      <input type="range" class="rangeB" min="0" max="6" step="1" value="0" />
       <div class="modes" data-key="b">
         <button data-mode="approximated_transit" aria-pressed="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".5" fill="currentColor"/><circle cx="15.5" cy="14" r=".5" fill="currentColor"/></svg>
@@ -392,8 +392,8 @@
 
     // Per-person state: marker, time budget, last computed isochrone feature.
     const P = {
-      a: { color: COLORS.a, minutes: 20, mode: "approximated_transit", iso: null, marker: null, start: [52.5200, 13.4050] },
-      b: { color: COLORS.b, minutes: 20, mode: "approximated_transit", iso: null, marker: null, start: [52.4862, 13.4262] }
+      a: { color: COLORS.a, minutes: 15, mode: "approximated_transit", iso: null, marker: null, start: [52.5200, 13.4050] },
+      b: { color: COLORS.b, minutes: 15, mode: "approximated_transit", iso: null, marker: null, start: [52.4862, 13.4262] }
     };
 
     // --- Map ----------------------------------------------------------
@@ -521,11 +521,17 @@
     }
 
     // --- Controls -----------------------------------------------------
+    // Non-linear time stops: fine (5-min) where it matters perceptually, coarse
+    // (10-min) up high where 5 min barely registers. The slider is an index into
+    // this array, so spacing is even on screen but the values aren't.
+    const STOPS = [15, 20, 25, 30, 40, 50, 60];
     function wireRange(key, rangeClass, valClass) {
       const range = document.querySelector(rangeClass);
       const val = document.querySelector(valClass);
-      range.addEventListener("input", () => { val.textContent = range.value; });
-      range.addEventListener("change", () => { P[key].minutes = parseInt(range.value, 10); recompute(key); });
+      const show = () => { val.textContent = STOPS[+range.value]; };
+      range.addEventListener("input", show);
+      range.addEventListener("change", () => { P[key].minutes = STOPS[+range.value]; recompute(key); });
+      show();   // sync the label with the initial index
     }
     wireRange("a", ".rangeA", ".valA");
     wireRange("b", ".rangeB", ".valB");
