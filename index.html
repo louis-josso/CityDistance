@@ -344,7 +344,8 @@
       if (saved) return [saved];
       const pool = [...new Set(
         [...HARDCODED_KEYS, ...injectedKeys, HARDCODED_KEY, injectedKey]
-          .map((k) => (k || "").trim()).filter(Boolean)
+          .flatMap((k) => (k || "").split(","))   // tolerate comma-lists in any source
+          .map((k) => k.trim()).filter(Boolean)
       )];
       for (let i = pool.length - 1; i > 0; i--) {       // Fisher–Yates shuffle
         const j = Math.floor(Math.random() * (i + 1));
