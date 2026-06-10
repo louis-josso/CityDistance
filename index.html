@@ -100,6 +100,20 @@
       width: 100%; margin: 12px 0 2px; accent-color: var(--c); cursor: pointer;
     }
     .person small { font-size: 10.5px; color: var(--muted); }
+    /* ---- Per-person travel-mode toggle ---- */
+    .modes { display: flex; gap: 4px; margin-top: 8px; }
+    .modes button {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      background: #fff; border: 1px solid var(--line); border-radius: 8px;
+      padding: 5px 6px; cursor: pointer; transition: all .12s;
+    }
+    .modes button svg { width: 14px; height: 14px; }
+    .modes button:hover { border-color: var(--c); }
+    .modes button[aria-pressed="true"] {
+      color: var(--c); background: var(--soft);
+      border-color: color-mix(in srgb, var(--c) 45%, transparent);
+    }
 
     /* ---- Key field ---- */
     .field { margin-top: 6px; }
@@ -233,6 +247,16 @@
         <span class="pill"><span class="valA">20</span> min</span>
       </div>
       <input type="range" class="rangeA" min="15" max="90" step="5" value="20" />
+      <div class="modes" data-key="a">
+        <button data-mode="approximated_transit" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".5" fill="currentColor"/><circle cx="15.5" cy="14" r=".5" fill="currentColor"/></svg>
+          Transit
+        </button>
+        <button data-mode="bicycle" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zM12 17.5L9 9h6l-3 8.5zM9 9l-2-2.5M15 9l3 8.5"/></svg>
+          Bike
+        </button>
+      </div>
       <small>Drop the blue pin on your job.</small>
     </div>
 
@@ -242,6 +266,16 @@
         <span class="pill"><span class="valB">20</span> min</span>
       </div>
       <input type="range" class="rangeB" min="15" max="90" step="5" value="20" />
+      <div class="modes" data-key="b">
+        <button data-mode="approximated_transit" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".5" fill="currentColor"/><circle cx="15.5" cy="14" r=".5" fill="currentColor"/></svg>
+          Transit
+        </button>
+        <button data-mode="bicycle" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zM12 17.5L9 9h6l-3 8.5zM9 9l-2-2.5M15 9l3 8.5"/></svg>
+          Bike
+        </button>
+      </div>
       <small>Drop the orange pin on their job.</small>
     </div>
     </div>
@@ -284,8 +318,8 @@
 
     // Per-person state: marker, time budget, last computed isochrone feature.
     const P = {
-      a: { color: COLORS.a, minutes: 20, iso: null, marker: null, start: [52.5200, 13.4050] },
-      b: { color: COLORS.b, minutes: 20, iso: null, marker: null, start: [52.4862, 13.4262] }
+      a: { color: COLORS.a, minutes: 20, mode: "approximated_transit", iso: null, marker: null, start: [52.5200, 13.4050] },
+      b: { color: COLORS.b, minutes: 20, mode: "approximated_transit", iso: null, marker: null, start: [52.4862, 13.4262] }
     };
 
     // --- Map ----------------------------------------------------------
@@ -337,7 +371,7 @@
       const { lat, lng } = p.marker.getLatLng();
       const url = "https://api.geoapify.com/v1/isoline"
         + `?lat=${lat}&lon=${lng}`
-        + "&type=time&mode=approximated_transit"
+        + `&type=time&mode=${p.mode}`
         + `&range=${p.minutes * 60}`
         + `&apiKey=${encodeURIComponent(apiKey)}`;
       const res = await fetch(url);
@@ -403,6 +437,20 @@
     }
     wireRange("a", ".rangeA", ".valA");
     wireRange("b", ".rangeB", ".valB");
+
+    // Per-person travel-mode toggle (transit / bike).
+    document.querySelectorAll(".modes").forEach((group) => {
+      const key = group.dataset.key;
+      group.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (P[key].mode === btn.dataset.mode) return;
+          P[key].mode = btn.dataset.mode;
+          group.querySelectorAll("button").forEach((b) =>
+            b.setAttribute("aria-pressed", String(b === btn)));
+          recompute(key);
+        });
+      });
+    });
 
     // --- City picker --------------------------------------------------
     const CITIES = [
