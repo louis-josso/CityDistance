@@ -303,6 +303,25 @@
     const COLORS = { a: "#2563eb", b: "#f97316", overlap: "#10b981" };
     const KEY_STORE = "geoapify_key";
 
+    // --- Analytics (Google Analytics 4) -------------------------------
+    // Paste your GA4 Measurement ID (looks like "G-XXXXXXXXXX"). Left as the
+    // placeholder, GA is NOT loaded — so local dev / forks send nothing.
+    const GA_ID = "G-HTPHZHCN84";
+    function track(name, params) {           // safe no-op until GA is configured
+      if (window.gtag) window.gtag("event", name, params || {});
+    }
+    (function initGA() {
+      if (!GA_ID || GA_ID === "G-XXXXXXXXXX") return;
+      const s = document.createElement("script");
+      s.async = true;
+      s.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(GA_ID);
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag("js", new Date());
+      window.gtag("config", GA_ID);
+    })();
+
     // Key injected at deploy time from a GitHub secret (see .github/workflows/
     // deploy.yml). In the repo source it stays the placeholder, so the key is
     // never committed. PLACEHOLDER is split so the deploy `sed` can't match it,
@@ -408,7 +427,9 @@
       const pool = keyPool();
       if (!pool.length) throw new Error("no API key");
       let lastErr = new Error("no API key");
+      let keyIndex = 0;
       for (const apiKey of pool) {
+        keyIndex++;
         const url = "https://api.geoapify.com/v1/isoline"
           + `?lat=${lat}&lon=${lng}`
           + `&type=time&mode=${p.mode}`
@@ -417,6 +438,13 @@
         const res = await fetch(url);
         if (res.ok) {
           const gj = await res.json();
+          track("compute_reach", {
+            person: key,             // "a" / "b"
+            mode: p.mode,            // approximated_transit / bicycle
+            minutes: p.minutes,      // the time budget ("distance")
+            city: citySelect.value,  // last-picked city
+            key_index: keyIndex      // which pooled key served it (rotation check)
+          });
           return (gj.features && gj.features[0]) || null;
         }
         lastErr = new Error(`Geoapify ${res.status}`);
@@ -528,7 +556,7 @@
     citySelect.value = "Berlin";
 
     async function recomputeBoth() {
-      if (!apiKeyEl.value.trim()) return;
+      if (!keyPool().length) return;
       await recompute("a");
       await recompute("b");
     }
@@ -545,11 +573,12 @@
 
     citySelect.addEventListener("change", () => {
       const c = CITIES.find((x) => x.name === citySelect.value);
-      if (c) goToCity(c.lat, c.lon, c.name);
+      if (c) { track("select_city", { city: c.name }); goToCity(c.lat, c.lon, c.name); }
     });
 
     locBtn.addEventListener("click", () => {
       if (!navigator.geolocation) { setStatus("Location isn't available here.", "error"); return; }
+      track("use_my_location", {});
       setStatus("Finding your location…", "busy");
       navigator.geolocation.getCurrentPosition(
         (pos) => goToCity(pos.coords.latitude, pos.coords.longitude, "Your area"),
