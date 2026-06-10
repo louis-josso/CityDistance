@@ -1,7 +1,11 @@
 name: Deploy to GitHub Pages
 
-# Publishes the site on every push to main, injecting the Geoapify API key
-# from a repository secret (GEOAPIFY_KEY) so it never lives in the repo.
+# Publishes the site on every push to main, injecting the Geoapify API key(s)
+# from a repository secret so they never live in the repo source.
+#   - GEOAPIFY_KEYS : comma-separated pool (e.g. "k1,k2,k3,k4,k5"), rotated in-browser
+#   - GEOAPIFY_KEY  : optional single key (backward compatible)
+# Note: injected keys still ship inside the published page (visible in network
+# requests) — domain-restrict EACH key in the Geoapify dashboard.
 # Requires: repo Settings -> Pages -> Source = "GitHub Actions".
 
 on:
@@ -27,11 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inject Geoapify API key
+      - name: Inject Geoapify API key(s)
         run: |
-          if [ -z "${{ secrets.GEOAPIFY_KEY }}" ]; then
-            echo "::warning::GEOAPIFY_KEY secret is empty — published page will need a manually entered key."
+          if [ -z "${{ secrets.GEOAPIFY_KEYS }}" ] && [ -z "${{ secrets.GEOAPIFY_KEY }}" ]; then
+            echo "::warning::No GEOAPIFY_KEYS / GEOAPIFY_KEY secret set — published page will need a manually entered key."
           fi
+          # Pool of keys (comma-separated, e.g. "k1,k2,k3,k4,k5"), rotated client-side.
+          # The KEYS placeholder doesn't overlap the singular one, so order is safe.
+          sed -i "s|__GEOAPIFY_KEYS__|${{ secrets.GEOAPIFY_KEYS }}|g" index.html
+          # Optional single-key secret, kept for backward compatibility.
           sed -i "s|__GEOAPIFY_KEY__|${{ secrets.GEOAPIFY_KEY }}|g" index.html
 
       - uses: actions/configure-pages@v5

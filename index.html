@@ -316,6 +316,43 @@
     const PLACEHOLDER = "__GEOAPIFY" + "_KEY__";
     const injectedKey = INJECTED_KEY === PLACEHOLDER ? "" : INJECTED_KEY;
 
+    // Multiple keys injected at deploy from the GEOAPIFY_KEYS secret (comma-
+    // separated). Same mechanism, plural — the workflow seds the placeholder.
+    // KEYS_PLACEHOLDER is split so the sed can't rewrite this detection line.
+    const INJECTED_KEYS = "__GEOAPIFY_KEYS__";
+    const KEYS_PLACEHOLDER = "__GEOAPIFY" + "_KEYS__";
+    const injectedKeys = INJECTED_KEYS === KEYS_PLACEHOLDER
+      ? [] : INJECTED_KEYS.split(",").map((k) => k.trim()).filter(Boolean);
+
+    // --- Key pool (rotated to spread each key's free daily quota) ------
+    // A browser key is ALWAYS visible in network requests — rotating does NOT
+    // hide it. The real protection is domain-restricting EACH key in the
+    // Geoapify dashboard (Allowed origins → https://louis-josso.github.io/*).
+    // Rotation only spreads load so one key's daily limit isn't the ceiling.
+    // Paste your domain-restricted keys here for the published page:
+    const HARDCODED_KEYS = [
+      // "your-first-key",
+      // "your-second-key",
+      // "your-third-key",
+    ];
+
+    // Keys to try, best-first. A locally-saved key (?key=… / localStorage) wins
+    // so you can test with a single key; otherwise the pool is shuffled so load
+    // spreads evenly and no one key is always hit first.
+    function keyPool() {
+      const saved = (localStorage.getItem(KEY_STORE) || "").trim();
+      if (saved) return [saved];
+      const pool = [...new Set(
+        [...HARDCODED_KEYS, ...injectedKeys, HARDCODED_KEY, injectedKey]
+          .map((k) => (k || "").trim()).filter(Boolean)
+      )];
+      for (let i = pool.length - 1; i > 0; i--) {       // Fisher–Yates shuffle
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      return pool;
+    }
+
     // Per-person state: marker, time budget, last computed isochrone feature.
     const P = {
       a: { color: COLORS.a, minutes: 20, mode: "approximated_transit", iso: null, marker: null, start: [52.5200, 13.4050] },
@@ -365,25 +402,34 @@
 
     // --- Geoapify isoline ---------------------------------------------
     async function fetchIso(key) {
-      const apiKey = apiKeyEl.value.trim();
-      if (!apiKey) throw new Error("no API key");
       const p = P[key];
       const { lat, lng } = p.marker.getLatLng();
-      const url = "https://api.geoapify.com/v1/isoline"
-        + `?lat=${lat}&lon=${lng}`
-        + `&type=time&mode=${p.mode}`
-        + `&range=${p.minutes * 60}`
-        + `&apiKey=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Geoapify ${res.status}`);
-      const gj = await res.json();
-      return (gj.features && gj.features[0]) || null;
+      const pool = keyPool();
+      if (!pool.length) throw new Error("no API key");
+      let lastErr = new Error("no API key");
+      for (const apiKey of pool) {
+        const url = "https://api.geoapify.com/v1/isoline"
+          + `?lat=${lat}&lon=${lng}`
+          + `&type=time&mode=${p.mode}`
+          + `&range=${p.minutes * 60}`
+          + `&apiKey=${encodeURIComponent(apiKey)}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const gj = await res.json();
+          return (gj.features && gj.features[0]) || null;
+        }
+        lastErr = new Error(`Geoapify ${res.status}`);
+        // Over-quota (429) or rejected key (401/403) → try the next key.
+        // Anything else (e.g. 400 bad request) is our bug, not the key — stop.
+        if (res.status !== 429 && res.status !== 401 && res.status !== 403) throw lastErr;
+      }
+      throw lastErr;   // every key exhausted/rejected
     }
 
     let token = 0;
     async function recompute(key) {
       const mine = ++token;
-      if (!apiKeyEl.value.trim()) {
+      if (!keyPool().length) {
         setStatus("No API key configured.", "error");
         return;
       }
@@ -535,7 +581,7 @@
     // Compute both reaches on load (pins start at the default jobs), so the map
     // isn't blank. Sequential awaits avoid the single-token redraw race.
     (async () => {
-      if (!apiKeyEl.value.trim()) return;
+      if (!keyPool().length) return;
       await recompute("a");
       await recompute("b");
     })();
