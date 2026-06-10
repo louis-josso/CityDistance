@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meet in the Middle · Berlin</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --a: #2563eb;          /* You */
+      --b: #f97316;          /* Partner */
+      --overlap: #10b981;    /* Both */
+      --a-soft: #eff4ff;
+      --b-soft: #fff4ec;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e8edf3;
+      --panel: rgba(255, 255, 255, 0.72);
+      --shadow: 0 10px 40px -8px rgba(15, 23, 42, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #map { position: absolute; inset: 0; z-index: 0; background: #eaeef3; }
+
+    /* ---- Panel ---- */
+    .panel {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 1000;
+      width: 320px;
+      max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      backdrop-filter: blur(18px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .brand .glyph {
+      width: 30px; height: 30px; border-radius: 9px; flex: none;
+      background: linear-gradient(135deg, var(--a), var(--overlap));
+      display: grid; place-items: center;
+      box-shadow: 0 4px 12px -2px rgba(37, 99, 235, 0.5);
+    }
+    .brand .glyph svg { width: 17px; height: 17px; stroke: #fff; }
+    h1 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+    .panel p.sub {
+      margin: 10px 0 18px;
+      font-size: 12.5px; color: var(--muted); line-height: 1.5;
+    }
+
+    /* ---- Person cards ---- */
+    .person {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .person .row { display: flex; align-items: center; justify-content: space-between; }
+    .person .name {
+      font-size: 13px; font-weight: 600; color: var(--c);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .person .name .dot {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent);
+    }
+    .pill {
+      font-size: 12px; font-weight: 700; color: var(--c);
+      background: #fff; border: 1px solid var(--line);
+      padding: 3px 9px; border-radius: 999px; font-variant-numeric: tabular-nums;
+    }
+    .person input[type="range"] {
+      width: 100%; margin: 12px 0 2px; accent-color: var(--c); cursor: pointer;
+    }
+    .person small { font-size: 10.5px; color: var(--muted); }
+
+    /* ---- Key field ---- */
+    .field { margin-top: 6px; }
+    .field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+    .field input[type="text"] {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--line);
+      border-radius: 10px; font-size: 12.5px; font-family: inherit; outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .field input[type="text"]:focus { border-color: var(--a); box-shadow: 0 0 0 3px var(--a-soft); }
+
+    /* ---- Status + hints ---- */
+    .status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted); margin-top: 14px;
+      padding-top: 14px; border-top: 1px solid var(--line); min-height: 16px;
+    }
+    .status .spark { width: 8px; height: 8px; border-radius: 50%; background: var(--overlap); flex: none; }
+    .status.error { color: #dc2626; }
+    .status.error .spark { background: #dc2626; }
+    .status.busy .spark { background: var(--a); animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+
+    .hint { font-size: 10.5px; color: #9aa6b6; margin-top: 8px; line-height: 1.5; }
+    .hint a { color: var(--a); text-decoration: none; font-weight: 500; }
+    .hint a:hover { text-decoration: underline; }
+
+    /* ---- Map markers / controls ---- */
+    .leaflet-container { font-family: inherit; }
+    .leaflet-control-zoom a {
+      border: none !important; color: var(--ink) !important;
+      background: var(--panel) !important;
+      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    }
+    .leaflet-bar { border: none !important; box-shadow: var(--shadow) !important; border-radius: 12px !important; overflow: hidden; }
+    .pin-tip {
+      background: var(--ink); color: #fff; border: none; border-radius: 8px;
+      font-size: 11px; font-weight: 600; padding: 3px 8px; box-shadow: var(--shadow);
+    }
+    .pin-tip::before { border-top-color: var(--ink); }
+
+    /* ---- City bar (top-centre) ---- */
+    .citybar {
+      position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; display: flex; align-items: center; gap: 6px;
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      backdrop-filter: blur(18px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 14px; box-shadow: var(--shadow);
+      padding: 6px 8px 6px 10px; max-width: calc(100vw - 32px);
+    }
+    .citybar .pin-ico { width: 16px; height: 16px; color: var(--a); flex: none; }
+    .citybar select {
+      border: none; background: transparent; font-family: inherit;
+      font-size: 13.5px; font-weight: 600; color: var(--ink);
+      cursor: pointer; outline: none; padding: 5px 4px; max-width: 46vw;
+    }
+    .citybar button {
+      flex: none; width: 32px; height: 32px; display: grid; place-items: center;
+      background: #fff; border: 1px solid var(--line); border-radius: 9px;
+      color: var(--ink); cursor: pointer; transition: background .15s;
+    }
+    .citybar button:hover { background: var(--a-soft); color: var(--a); }
+    .citybar button svg { width: 16px; height: 16px; }
+
+    /* Grab handle, shown only as a bottom sheet on phones */
+    .sheet-handle { display: none; }
+
+    /* ---- Mobile: dock the panel as a bottom sheet ---- */
+    @media (max-width: 640px) {
+      .panel {
+        top: auto; left: 0; right: 0; bottom: 0;
+        width: 100%; max-width: 100%;
+        max-height: 64vh;
+        border-radius: 22px 22px 0 0;
+        border-bottom: none;
+        padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+      }
+      .sheet-handle {
+        display: block;
+        width: 40px; height: 4px; border-radius: 999px;
+        background: #cbd5e1; margin: 4px auto 12px;
+      }
+      .brand { margin-bottom: 2px; }
+      .panel p.sub { margin: 8px 0 14px; }
+      .person { margin-bottom: 10px; }
+      /* Two cards side by side to save vertical room */
+      .people { display: flex; gap: 10px; }
+      .people .person { flex: 1; margin-bottom: 0; }
+      .person small { display: none; }
+
+      /* Tap the handle / title to fold the sheet down to just the title */
+      .sheet-handle { cursor: pointer; padding: 6px 0; margin: -2px auto 12px; }
+      .brand { cursor: pointer; }
+      .panel.collapsed { max-height: none; }
+      .panel.collapsed .brand { margin-bottom: 0; }
+      .panel.collapsed p.sub,
+      .panel.collapsed .people,
+      .panel.collapsed .status { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="citybar">
+    <svg class="pin-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10Z"/><circle cx="12" cy="11" r="2"/></svg>
+    <select id="citySelect" aria-label="City"></select>
+    <button id="locBtn" type="button" title="Use my location" aria-label="Use my location">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+  </div>
+
+  <div class="panel">
+    <div class="sheet-handle"></div>
+    <div class="brand">
+      <span class="glyph">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10Z"/><circle cx="12" cy="11" r="2"/>
+        </svg>
+      </span>
+      <h1>Meet in the Middle</h1>
+    </div>
+    <p class="sub">Drop both your jobs on the map and set how far each of you is willing to travel. The green zone is where you can both live — your middle ground. 💚</p>
+
+    <div class="people">
+    <div class="person" id="personA" style="--c: #2563eb; --soft: #eff4ff">
+      <div class="row">
+        <span class="name"><span class="dot"></span> You</span>
+        <span class="pill"><span class="valA">20</span> min</span>
+      </div>
+      <input type="range" class="rangeA" min="15" max="90" step="5" value="20" />
+      <small>Drop the blue pin on your job.</small>
+    </div>
+
+    <div class="person" id="personB" style="--c: #f97316; --soft: #fff4ec">
+      <div class="row">
+        <span class="name"><span class="dot"></span> Partner</span>
+        <span class="pill"><span class="valB">20</span> min</span>
+      </div>
+      <input type="range" class="rangeB" min="15" max="90" step="5" value="20" />
+      <small>Drop the orange pin on their job.</small>
+    </div>
+    </div>
+
+    <div class="field" id="keyField" style="display:none">
+      <label>Geoapify API key</label>
+      <input type="text" id="apiKey" placeholder="paste your free key" autocomplete="off" />
+      <div class="hint">Free key (no card, 3000/day) at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a>. Saved in this browser only.</div>
+    </div>
+
+    <div class="status" id="status"><span class="spark"></span><span id="statusText"></span></div>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"
+    integrity="sha384-82q0nm29xZzIo5BMtDYnh2/NxeO6FoaK1S/0nF84w3cEsqbBfun3JdMyDVYWfVY5"
+    crossorigin="anonymous"></script>
+
+  <script>
+    "use strict";
+
+    const COLORS = { a: "#2563eb", b: "#f97316", overlap: "#10b981" };
+    const KEY_STORE = "geoapify_key";
+
+    // Key injected at deploy time from a GitHub secret (see .github/workflows/
+    // deploy.yml). In the repo source it stays the placeholder, so the key is
+    // never committed. PLACEHOLDER is split so the deploy `sed` can't match it,
+    // letting us detect "not injected" (local dev) vs "injected" (published).
+    // Paste your (domain-restricted) Geoapify key here to publish with no
+    // backend or secret. Safe once the key is locked to your domain in the
+    // Geoapify dashboard — see README.
+    const HARDCODED_KEY = "";
+
+    const INJECTED_KEY = "__GEOAPIFY_KEY__";
+    const PLACEHOLDER = "__GEOAPIFY" + "_KEY__";
+    const injectedKey = INJECTED_KEY === PLACEHOLDER ? "" : INJECTED_KEY;
+
+    // Per-person state: marker, time budget, last computed isochrone feature.
+    const P = {
+      a: { color: COLORS.a, minutes: 20, iso: null, marker: null, start: [52.5200, 13.4050] },
+      b: { color: COLORS.b, minutes: 20, iso: null, marker: null, start: [52.4862, 13.4262] }
+    };
+
+    // --- Map ----------------------------------------------------------
+    const map = L.map("map", { zoomControl: true }).setView([52.5100, 13.4050], 11);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      maxZoom: 20,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    }).addTo(map);
+    map.zoomControl.setPosition("topright");
+
+    const polygonLayer = L.layerGroup().addTo(map);
+    const statusEl = document.getElementById("status");
+    const statusText = document.getElementById("statusText");
+    const apiKeyEl = document.getElementById("apiKey");
+
+    function setStatus(msg, kind) {
+      statusText.textContent = msg || "";
+      statusEl.classList.toggle("error", kind === "error");
+      statusEl.classList.toggle("busy", kind === "busy");
+    }
+
+    // Modern map pin per person.
+    function makeIcon(color) {
+      return L.divIcon({
+        className: "",
+        html: `<div style="position:relative;width:24px;height:24px">
+                 <div style="width:24px;height:24px;background:${color};border:3px solid #fff;
+                      border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+                      box-shadow:0 4px 10px -1px rgba(15,23,42,.45)"></div>
+                 <div style="position:absolute;top:8px;left:8px;width:8px;height:8px;
+                      background:#fff;border-radius:50%"></div>
+               </div>`,
+        iconSize: [24, 24], iconAnchor: [12, 24]
+      });
+    }
+
+    for (const key of ["a", "b"]) {
+      const p = P[key];
+      p.marker = L.marker(p.start, { draggable: true, icon: makeIcon(p.color) }).addTo(map);
+      p.marker.bindTooltip(key === "a" ? "You" : "Partner", { className: "pin-tip", direction: "top", offset: [0, -22] });
+      p.marker.on("dragend", () => recompute(key));
+    }
+
+    // --- Geoapify isoline ---------------------------------------------
+    async function fetchIso(key) {
+      const apiKey = apiKeyEl.value.trim();
+      if (!apiKey) throw new Error("no API key");
+      const p = P[key];
+      const { lat, lng } = p.marker.getLatLng();
+      const url = "https://api.geoapify.com/v1/isoline"
+        + `?lat=${lat}&lon=${lng}`
+        + "&type=time&mode=approximated_transit"
+        + `&range=${p.minutes * 60}`
+        + `&apiKey=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Geoapify ${res.status}`);
+      const gj = await res.json();
+      return (gj.features && gj.features[0]) || null;
+    }
+
+    let token = 0;
+    async function recompute(key) {
+      const mine = ++token;
+      if (!apiKeyEl.value.trim()) {
+        setStatus("No API key configured.", "error");
+        return;
+      }
+      setStatus(`Mapping ${key === "a" ? "your" : "their"} reach…`, "busy");
+      try {
+        P[key].iso = await fetchIso(key);
+      } catch (e) {
+        if (mine !== token) return;
+        setStatus(`Couldn't fetch reach (${e.message}). Check the key / daily limit.`, "error");
+        return;
+      }
+      if (mine !== token) return;
+      redraw();
+    }
+
+    function safeOp(fn, x, y) { try { return fn(x, y); } catch (e) { return null; } }
+    function draw(feature, color, fillOpacity) {
+      if (!feature) return;
+      L.geoJSON(feature, {
+        style: { color, weight: 1.5, fillColor: color, fillOpacity, opacity: 0.6 }
+      }).addTo(polygonLayer);
+    }
+
+    function redraw() {
+      polygonLayer.clearLayers();
+      const a = P.a.iso, b = P.b.iso;
+      if (!a && !b) { setStatus("Drop a pin to see where you can get to."); return; }
+
+      const overlap = (a && b) ? safeOp(turf.intersect, a, b) : null;
+      const aOnly = (a && b) ? (safeOp(turf.difference, a, b) || a) : a;
+      const bOnly = (a && b) ? (safeOp(turf.difference, b, a) || b) : b;
+
+      draw(aOnly, COLORS.a, 0.30);
+      draw(bOnly, COLORS.b, 0.30);
+      draw(overlap, COLORS.overlap, 0.55);
+
+      if (a && b) {
+        setStatus(overlap ? "💚 The green zone is your middle ground — reachable by both."
+                          : "No middle ground yet — give yourselves a bit more time.");
+      } else {
+        setStatus("Now drop the other pin to find your middle ground.");
+      }
+    }
+
+    // --- Controls -----------------------------------------------------
+    function wireRange(key, rangeClass, valClass) {
+      const range = document.querySelector(rangeClass);
+      const val = document.querySelector(valClass);
+      range.addEventListener("input", () => { val.textContent = range.value; });
+      range.addEventListener("change", () => { P[key].minutes = parseInt(range.value, 10); recompute(key); });
+    }
+    wireRange("a", ".rangeA", ".valA");
+    wireRange("b", ".rangeB", ".valB");
+
+    // --- City picker --------------------------------------------------
+    const CITIES = [
+      { name: "Berlin", lat: 52.5200, lon: 13.4050 },
+      { name: "Hamburg", lat: 53.5511, lon: 9.9937 },
+      { name: "Munich", lat: 48.1351, lon: 11.5820 },
+      { name: "Cologne", lat: 50.9375, lon: 6.9603 },
+      { name: "Amsterdam", lat: 52.3676, lon: 4.9041 },
+      { name: "Brussels", lat: 50.8503, lon: 4.3517 },
+      { name: "Paris", lat: 48.8566, lon: 2.3522 },
+      { name: "London", lat: 51.5074, lon: -0.1278 },
+      { name: "Vienna", lat: 48.2082, lon: 16.3738 },
+      { name: "Zurich", lat: 47.3769, lon: 8.5417 },
+      { name: "Milan", lat: 45.4642, lon: 9.1900 },
+      { name: "Madrid", lat: 40.4168, lon: -3.7038 },
+      { name: "Barcelona", lat: 41.3874, lon: 2.1686 },
+      { name: "Lisbon", lat: 38.7223, lon: -9.1393 },
+      { name: "Copenhagen", lat: 55.6761, lon: 12.5683 }
+    ];
+    const citySelect = document.getElementById("citySelect");
+    const locBtn = document.getElementById("locBtn");
+    CITIES.forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c.name; o.textContent = c.name;
+      citySelect.appendChild(o);
+    });
+    citySelect.value = "Berlin";
+
+    async function recomputeBoth() {
+      if (!apiKeyEl.value.trim()) return;
+      await recompute("a");
+      await recompute("b");
+    }
+
+    // Move both pins near a city centre (offset so they're distinct), recentre,
+    // then recompute. From here you drag each pin to the real job.
+    function goToCity(lat, lon, label) {
+      P.a.marker.setLatLng([lat + 0.012, lon - 0.020]);
+      P.b.marker.setLatLng([lat - 0.012, lon + 0.020]);
+      map.setView([lat, lon], 12);
+      setStatus(`${label} — drag each pin to a job.`);
+      recomputeBoth();
+    }
+
+    citySelect.addEventListener("change", () => {
+      const c = CITIES.find((x) => x.name === citySelect.value);
+      if (c) goToCity(c.lat, c.lon, c.name);
+    });
+
+    locBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) { setStatus("Location isn't available here.", "error"); return; }
+      setStatus("Finding your location…", "busy");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => goToCity(pos.coords.latitude, pos.coords.longitude, "Your area"),
+        () => setStatus("Couldn't get your location.", "error")
+      );
+    });
+
+    // Mobile only (handle/title are inert on desktop): fold the sheet to reveal
+    // the full map. Toggling the class does nothing on desktop — the collapse
+    // styles live inside the mobile media query.
+    const panel = document.querySelector(".panel");
+    const toggleSheet = () => panel.classList.toggle("collapsed");
+    document.querySelector(".sheet-handle").addEventListener("click", toggleSheet);
+    document.querySelector(".brand").addEventListener("click", toggleSheet);
+
+    // Prefer a key you typed (saved locally); otherwise the deploy-injected one.
+    apiKeyEl.value = localStorage.getItem(KEY_STORE) || HARDCODED_KEY || injectedKey;
+
+    // No visible key UI. The key comes from the deploy-injected value or local
+    // storage; ?key=... in the URL is a silent fallback to set one. (Real
+    // protection is the Geoapify domain restriction, not hiding the box.)
+    const urlKey = new URLSearchParams(location.search).get("key");
+    if (urlKey) {
+      localStorage.setItem(KEY_STORE, urlKey.trim());
+      apiKeyEl.value = urlKey.trim();
+    }
+
+    setStatus("Drop a pin to see where you can get to.");
+
+    // Compute both reaches on load (pins start at the default jobs), so the map
+    // isn't blank. Sequential awaits avoid the single-token redraw race.
+    (async () => {
+      if (!apiKeyEl.value.trim()) return;
+      await recompute("a");
+      await recompute("b");
+    })();
+  </script>
+</body>
+</html>
