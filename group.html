@@ -120,6 +120,8 @@
     }
     .remove:hover { color: #dc2626; border-color: #fca5a5; }
     .remove[hidden] { display: none; }
+    /* Mobile-only summary bits (hidden on desktop, where cards are always open) */
+    .modemini, .chev { display: none; }
     .person input[type="range"] {
       width: 100%; margin: 12px 0 2px; accent-color: var(--c); cursor: pointer;
     }
@@ -236,8 +238,31 @@
       }
       .brand { margin-bottom: 2px; }
       .panel p.sub { margin: 8px 0 6px; }
-      .person { margin-bottom: 10px; }
       .person small { display: none; }
+
+      /* ---- Mobile accordion: each person collapses to a tappable one-liner ---- */
+      .person { margin-bottom: 8px; padding: 0; overflow: hidden; }
+      .person .row {
+        min-height: 48px; padding: 11px 14px; cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .modemini { display: inline; font-size: 14px; line-height: 1; }
+      .chev {
+        display: inline-block; width: 9px; height: 9px; margin-left: 4px;
+        border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+        transform: rotate(45deg); transition: transform .15s;   /* points down = open */
+      }
+      .person input[type="range"] { margin: 4px 14px 2px; width: calc(100% - 28px); }
+      .person .modes { margin: 8px 14px 12px; }
+      .remove { width: 34px; height: 34px; font-size: 20px; }   /* bigger tap target */
+
+      /* Collapsed: hide the body + remove, point the chevron right. */
+      .person.collapsed input[type="range"],
+      .person.collapsed .modes,
+      .person.collapsed .remove { display: none; }
+      .person.collapsed .chev { transform: rotate(-45deg); }
+      /* When open, the mode glyph is redundant with the toggle below. */
+      .person:not(.collapsed) .modemini { display: none; }
 
       /* Tap the handle / title to fold the sheet down to just the title */
       .sheet-handle { cursor: pointer; padding: 6px 0; margin: -2px auto 12px; }
@@ -582,7 +607,9 @@
           <span class="name"><span class="dot"></span> <span class="pname">Person</span></span>
           <span class="rgt">
             <span class="pill"><span class="val">15</span> min</span>
+            <span class="modemini" aria-hidden="true">🚆</span>
             <button class="remove" type="button" title="Remove" aria-label="Remove">&times;</button>
+            <span class="chev" aria-hidden="true"></span>
           </span>
         </div>
         <input type="range" min="0" max="6" step="1" value="0" />
@@ -593,6 +620,7 @@
 
       const range = card.querySelector('input[type="range"]');
       const val = card.querySelector(".val");
+      const mini = card.querySelector(".modemini");
       const show = () => { val.textContent = STOPS[+range.value]; };
       range.addEventListener("input", show);
       range.addEventListener("change", () => { point.minutes = STOPS[+range.value]; recompute(point); });
@@ -603,14 +631,29 @@
           if (point.mode === btn.dataset.mode) return;
           point.mode = btn.dataset.mode;
           card.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+          mini.textContent = point.mode === "bicycle" ? "🚲" : "🚆";   // mobile summary glyph
           recompute(point);
         });
       });
 
-      card.querySelector(".remove").addEventListener("click", () => removePoint(point));
+      card.querySelector(".remove").addEventListener("click", (e) => { e.stopPropagation(); removePoint(point); });
+
+      // Mobile accordion: tapping the header row expands this person (and
+      // collapses the others) or closes it again. Inert on desktop, where the
+      // .collapsed class has no styling so every card stays fully open.
+      card.querySelector(".row").addEventListener("click", (e) => {
+        if (e.target.closest(".remove")) return;
+        if (card.classList.contains("collapsed")) setExpanded(point);
+        else card.classList.add("collapsed");
+      });
 
       point.el = card;
       peopleEl.appendChild(card);
+    }
+
+    // Expand one person's card, collapse the rest (mobile accordion).
+    function setExpanded(point) {
+      POINTS.forEach((p) => p.el.classList.toggle("collapsed", p !== point));
     }
 
     // Re-number names + tooltips, and toggle add/remove affordances.
@@ -642,6 +685,7 @@
 
       POINTS.push(point);
       buildCard(point);
+      setExpanded(point);   // open the new card (mobile); inert on desktop
       refreshControls();
       recompute(point);
     }
