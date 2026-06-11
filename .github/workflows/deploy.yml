@@ -38,9 +38,10 @@ jobs:
           fi
           # Pool of keys (comma-separated, e.g. "k1,k2,k3,k4,k5"), rotated client-side.
           # The KEYS placeholder doesn't overlap the singular one, so order is safe.
-          sed -i "s|__GEOAPIFY_KEYS__|${{ secrets.GEOAPIFY_KEYS }}|g" index.html
+          # Inject into every page that calls Geoapify (index = 2-person, group = 1-5).
+          sed -i "s|__GEOAPIFY_KEYS__|${{ secrets.GEOAPIFY_KEYS }}|g" index.html group.html
           # Optional single-key secret, kept for backward compatibility.
-          sed -i "s|__GEOAPIFY_KEY__|${{ secrets.GEOAPIFY_KEY }}|g" index.html
+          sed -i "s|__GEOAPIFY_KEY__|${{ secrets.GEOAPIFY_KEY }}|g" index.html group.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -3,23 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Meet in the Middle · Berlin</title>
-  <meta name="description" content="Find where two people can both live based on public-transport (or bike) commute time to each of their jobs." />
+  <title>Meet in the Middle · Group</title>
+  <meta name="description" content="Find where a group of people can all meet within a fair travel time, by transit or bike." />
 
-  <!-- Social sharing preview (Open Graph + Twitter Card).
-       og:image MUST be an absolute URL. Add an og-image.png (1200×630) to the
-       repo root so it resolves at the URL below. Re-share / re-scrape after a
-       change: https://www.opengraph.xyz/ or the platform's debugger. -->
+  <!-- Social sharing preview (Open Graph + Twitter Card). Reuses og-image.png. -->
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://louis-josso.github.io/CityDistance/" />
-  <meta property="og:title" content="Meet in the Middle" />
-  <meta property="og:description" content="Find where two people can both live based on commute time to each of their jobs." />
+  <meta property="og:url" content="https://louis-josso.github.io/CityDistance/group.html" />
+  <meta property="og:title" content="Meet in the Middle (group)" />
+  <meta property="og:description" content="Find where a group of people can all meet within a fair travel time, by transit or bike." />
   <meta property="og:image" content="https://louis-josso.github.io/CityDistance/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Meet in the Middle" />
-  <meta name="twitter:description" content="Find where two people can both live based on commute time to each of their jobs." />
+  <meta name="twitter:title" content="Meet in the Middle (group)" />
+  <meta name="twitter:description" content="Find where a group of people can all meet within a fair travel time, by transit or bike." />
   <meta name="twitter:image" content="https://louis-josso.github.io/CityDistance/og-image.png" />
 
   <link
@@ -34,11 +31,9 @@
 
   <style>
     :root {
-      --a: #2563eb;          /* You */
-      --b: #f97316;          /* Partner */
-      --overlap: #10b981;    /* Both */
+      --a: #2563eb;          /* first person / accent */
+      --overlap: #10b981;    /* everyone */
       --a-soft: #eff4ff;
-      --b-soft: #fff4ec;
       --ink: #0f172a;
       --muted: #64748b;
       --line: #e8edf3;
@@ -87,7 +82,7 @@
     .brand .glyph svg { width: 17px; height: 17px; stroke: #fff; }
     h1 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
     .panel p.sub {
-      margin: 10px 0 10px;
+      margin: 10px 0 8px;
       font-size: 12.5px; color: var(--muted); line-height: 1.5;
     }
     .toplink { font-size: 10.5px; margin: 0 0 16px; }
@@ -111,11 +106,20 @@
       width: 11px; height: 11px; border-radius: 50%;
       background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent);
     }
+    .person .rgt { display: flex; align-items: center; gap: 6px; }
     .pill {
       font-size: 12px; font-weight: 700; color: var(--c);
       background: #fff; border: 1px solid var(--line);
       padding: 3px 9px; border-radius: 999px; font-variant-numeric: tabular-nums;
     }
+    .remove {
+      width: 20px; height: 20px; border-radius: 50%; flex: none;
+      border: 1px solid var(--line); background: #fff; color: var(--muted);
+      cursor: pointer; line-height: 1; font-size: 15px; padding: 0;
+      display: grid; place-items: center; transition: all .12s;
+    }
+    .remove:hover { color: #dc2626; border-color: #fca5a5; }
+    .remove[hidden] { display: none; }
     .person input[type="range"] {
       width: 100%; margin: 12px 0 2px; accent-color: var(--c); cursor: pointer;
     }
@@ -134,6 +138,18 @@
       color: var(--c); background: var(--soft);
       border-color: color-mix(in srgb, var(--c) 45%, transparent);
     }
+
+    /* ---- Add-person button ---- */
+    .addbtn {
+      width: 100%; padding: 10px; margin-bottom: 4px;
+      border: 1.5px dashed var(--line); border-radius: 12px;
+      background: #fff; color: var(--muted);
+      font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+      transition: all .12s; display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .addbtn svg { width: 15px; height: 15px; }
+    .addbtn:hover { border-color: var(--a); color: var(--a); }
+    .addbtn[hidden] { display: none; }
 
     /* ---- Key field ---- */
     .field { margin-top: 6px; }
@@ -219,11 +235,8 @@
         background: #cbd5e1; margin: 4px auto 12px;
       }
       .brand { margin-bottom: 2px; }
-      .panel p.sub { margin: 8px 0 14px; }
+      .panel p.sub { margin: 8px 0 6px; }
       .person { margin-bottom: 10px; }
-      /* Two cards side by side to save vertical room */
-      .people { display: flex; gap: 10px; }
-      .people .person { flex: 1; margin-bottom: 0; }
       .person small { display: none; }
 
       /* Tap the handle / title to fold the sheet down to just the title */
@@ -234,6 +247,7 @@
       .panel.collapsed p.sub,
       .panel.collapsed .toplink,
       .panel.collapsed .people,
+      .panel.collapsed .addbtn,
       .panel.collapsed .status { display: none; }
     }
   </style>
@@ -259,48 +273,15 @@
       </span>
       <h1>Meet in the Middle</h1>
     </div>
-    <p class="sub">Drop both your jobs on the map and set how far each of you is willing to travel. The green zone is where you can both live — your middle ground. 💚</p>
-    <div class="toplink"><a href="group.html">More than two people? Try the group version →</a></div>
+    <p class="sub">Add a pin for everyone (up to 5) and set how far each is willing to travel. The green zone is where you can <b>all</b> meet. 💚</p>
+    <div class="toplink"><a href="index.html">← Just two people? Use the simpler version</a></div>
 
-    <div class="people">
-    <div class="person" id="personA" style="--c: #2563eb; --soft: #eff4ff">
-      <div class="row">
-        <span class="name"><span class="dot"></span> You</span>
-        <span class="pill"><span class="valA">15</span> min</span>
-      </div>
-      <input type="range" class="rangeA" min="0" max="6" step="1" value="0" />
-      <div class="modes" data-key="a">
-        <button data-mode="approximated_transit" aria-pressed="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".5" fill="currentColor"/><circle cx="15.5" cy="14" r=".5" fill="currentColor"/></svg>
-          Transit
-        </button>
-        <button data-mode="bicycle" aria-pressed="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zM12 17.5L9 9h6l-3 8.5zM9 9l-2-2.5M15 9l3 8.5"/></svg>
-          Bike
-        </button>
-      </div>
-      <small>Drop the blue pin on your job.</small>
-    </div>
+    <div class="people" id="people"></div>
 
-    <div class="person" id="personB" style="--c: #f97316; --soft: #fff4ec">
-      <div class="row">
-        <span class="name"><span class="dot"></span> Partner</span>
-        <span class="pill"><span class="valB">15</span> min</span>
-      </div>
-      <input type="range" class="rangeB" min="0" max="6" step="1" value="0" />
-      <div class="modes" data-key="b">
-        <button data-mode="approximated_transit" aria-pressed="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".5" fill="currentColor"/><circle cx="15.5" cy="14" r=".5" fill="currentColor"/></svg>
-          Transit
-        </button>
-        <button data-mode="bicycle" aria-pressed="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zM12 17.5L9 9h6l-3 8.5zM9 9l-2-2.5M15 9l3 8.5"/></svg>
-          Bike
-        </button>
-      </div>
-      <small>Drop the orange pin on their job.</small>
-    </div>
-    </div>
+    <button class="addbtn" id="addBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Add a person
+    </button>
 
     <div class="field" id="keyField" style="display:none">
       <label>Geoapify API key</label>
@@ -322,12 +303,28 @@
   <script>
     "use strict";
 
-    const COLORS = { a: "#2563eb", b: "#f97316", overlap: "#10b981" };
+    const OVERLAP = "#10b981";
     const KEY_STORE = "geoapify_key";
 
+    // Up to 5 people. Each slot has a stable colour, taken on add, freed on
+    // remove, so an existing pin never changes colour when someone else leaves.
+    const MAX_POINTS = 5;
+    const POINT_DEFS = [
+      { color: "#2563eb", soft: "#eff4ff" },
+      { color: "#f97316", soft: "#fff4ec" },
+      { color: "#8b5cf6", soft: "#f5f3ff" },
+      { color: "#db2777", soft: "#fdf2f8" },
+      { color: "#0891b2", soft: "#ecfeff" },
+    ];
+    // Small offsets so freshly-added pins don't stack on the map centre.
+    const OFFSETS = [
+      [0.000, 0.000], [0.013, -0.022], [-0.013, 0.022], [0.015, 0.020], [-0.016, -0.018],
+    ];
+
+    const TRANSIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".5" fill="currentColor"/><circle cx="15.5" cy="14" r=".5" fill="currentColor"/></svg>';
+    const BIKE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zM12 17.5L9 9h6l-3 8.5zM9 9l-2-2.5M15 9l3 8.5"/></svg>';
+
     // --- Analytics (Google Analytics 4) -------------------------------
-    // Paste your GA4 Measurement ID (looks like "G-XXXXXXXXXX"). Left as the
-    // placeholder, GA is NOT loaded — so local dev / forks send nothing.
     const GA_ID = "G-HTPHZHCN84";
     function track(name, params) {           // safe no-op until GA is configured
       if (window.gtag) window.gtag("event", name, params || {});
@@ -344,42 +341,24 @@
       window.gtag("config", GA_ID);
     })();
 
-    // Key injected at deploy time from a GitHub secret (see .github/workflows/
-    // deploy.yml). In the repo source it stays the placeholder, so the key is
-    // never committed. PLACEHOLDER is split so the deploy `sed` can't match it,
-    // letting us detect "not injected" (local dev) vs "injected" (published).
-    // Paste your (domain-restricted) Geoapify key here to publish with no
-    // backend or secret. Safe once the key is locked to your domain in the
-    // Geoapify dashboard — see README.
+    // --- API keys (injected at deploy; see deploy.yml) ----------------
     const HARDCODED_KEY = "";
-
     const INJECTED_KEY = "__GEOAPIFY_KEY__";
     const PLACEHOLDER = "__GEOAPIFY" + "_KEY__";
     const injectedKey = INJECTED_KEY === PLACEHOLDER ? "" : INJECTED_KEY;
 
-    // Multiple keys injected at deploy from the GEOAPIFY_KEYS secret (comma-
-    // separated). Same mechanism, plural — the workflow seds the placeholder.
-    // KEYS_PLACEHOLDER is split so the sed can't rewrite this detection line.
     const INJECTED_KEYS = "__GEOAPIFY_KEYS__";
     const KEYS_PLACEHOLDER = "__GEOAPIFY" + "_KEYS__";
     const injectedKeys = INJECTED_KEYS === KEYS_PLACEHOLDER
       ? [] : INJECTED_KEYS.split(",").map((k) => k.trim()).filter(Boolean);
 
-    // --- Key pool (rotated to spread each key's free daily quota) ------
-    // A browser key is ALWAYS visible in network requests — rotating does NOT
-    // hide it. The real protection is domain-restricting EACH key in the
-    // Geoapify dashboard (Allowed origins → https://louis-josso.github.io/*).
-    // Rotation only spreads load so one key's daily limit isn't the ceiling.
-    // Paste your domain-restricted keys here for the published page:
     const HARDCODED_KEYS = [
       // "your-first-key",
       // "your-second-key",
-      // "your-third-key",
     ];
 
-    // Keys to try, best-first. A locally-saved key (?key=… / localStorage) wins
-    // so you can test with a single key; otherwise the pool is shuffled so load
-    // spreads evenly and no one key is always hit first.
+    // A locally-saved key (?key=… / localStorage) wins; otherwise the pool is
+    // shuffled so load spreads and no one key is always hit first.
     function keyPool() {
       const saved = (localStorage.getItem(KEY_STORE) || "").trim();
       if (saved) return [saved];
@@ -395,11 +374,16 @@
       return pool;
     }
 
-    // Per-person state: marker, time budget, last computed isochrone feature.
-    const P = {
-      a: { color: COLORS.a, minutes: 15, mode: "approximated_transit", iso: null, marker: null, start: [52.5200, 13.4050] },
-      b: { color: COLORS.b, minutes: 15, mode: "approximated_transit", iso: null, marker: null, start: [52.4862, 13.4262] }
-    };
+    // Non-linear time stops (fine low, coarse high). Slider is an index into it.
+    const STOPS = [15, 20, 25, 30, 40, 50, 60];
+
+    // --- State --------------------------------------------------------
+    const POINTS = [];            // active people, in display order
+    const usedColors = new Set(); // indexes into POINT_DEFS currently taken
+    function takeColorDef() {
+      for (let i = 0; i < POINT_DEFS.length; i++) if (!usedColors.has(i)) { usedColors.add(i); return i; }
+      return 0;
+    }
 
     // --- Map ----------------------------------------------------------
     const map = L.map("map", { zoomControl: true }).setView([52.5100, 13.4050], 11);
@@ -413,6 +397,8 @@
     const statusEl = document.getElementById("status");
     const statusText = document.getElementById("statusText");
     const apiKeyEl = document.getElementById("apiKey");
+    const peopleEl = document.getElementById("people");
+    const addBtn = document.getElementById("addBtn");
 
     function setStatus(msg, kind) {
       statusText.textContent = msg || "";
@@ -420,7 +406,6 @@
       statusEl.classList.toggle("busy", kind === "busy");
     }
 
-    // Modern map pin per person.
     function makeIcon(color) {
       return L.divIcon({
         className: "",
@@ -435,17 +420,9 @@
       });
     }
 
-    for (const key of ["a", "b"]) {
-      const p = P[key];
-      p.marker = L.marker(p.start, { draggable: true, icon: makeIcon(p.color) }).addTo(map);
-      p.marker.bindTooltip(key === "a" ? "You" : "Partner", { className: "pin-tip", direction: "top", offset: [0, -22] });
-      p.marker.on("dragend", () => recompute(key));
-    }
-
     // --- Geoapify isoline ---------------------------------------------
-    async function fetchIso(key) {
-      const p = P[key];
-      const { lat, lng } = p.marker.getLatLng();
+    async function fetchIso(point) {
+      const { lat, lng } = point.marker.getLatLng();
       const pool = keyPool();
       if (!pool.length) throw new Error("no API key");
       let lastErr = new Error("no API key");
@@ -454,39 +431,35 @@
         keyIndex++;
         const url = "https://api.geoapify.com/v1/isoline"
           + `?lat=${lat}&lon=${lng}`
-          + `&type=time&mode=${p.mode}`
-          + `&range=${p.minutes * 60}`
+          + `&type=time&mode=${point.mode}`
+          + `&range=${point.minutes * 60}`
           + `&apiKey=${encodeURIComponent(apiKey)}`;
         const res = await fetch(url);
         if (res.ok) {
           const gj = await res.json();
           track("compute_reach", {
-            person: key,             // "a" / "b"
-            mode: p.mode,            // approximated_transit / bicycle
-            minutes: p.minutes,      // the time budget ("distance")
-            city: citySelect.value,  // last-picked city
-            key_index: keyIndex      // which pooled key served it (rotation check)
+            person: POINTS.indexOf(point) + 1,
+            people: POINTS.length,
+            mode: point.mode,
+            minutes: point.minutes,
+            city: citySelect.value,
+            key_index: keyIndex
           });
           return (gj.features && gj.features[0]) || null;
         }
         lastErr = new Error(`Geoapify ${res.status}`);
-        // Over-quota (429) or rejected key (401/403) → try the next key.
-        // Anything else (e.g. 400 bad request) is our bug, not the key — stop.
         if (res.status !== 429 && res.status !== 401 && res.status !== 403) throw lastErr;
       }
       throw lastErr;   // every key exhausted/rejected
     }
 
     let token = 0;
-    async function recompute(key) {
+    async function recompute(point) {
       const mine = ++token;
-      if (!keyPool().length) {
-        setStatus("No API key configured.", "error");
-        return;
-      }
-      setStatus(`Mapping ${key === "a" ? "your" : "their"} reach…`, "busy");
+      if (!keyPool().length) { setStatus("No API key configured.", "error"); return; }
+      setStatus("Mapping reach…", "busy");
       try {
-        P[key].iso = await fetchIso(key);
+        point.iso = await fetchIso(point);
       } catch (e) {
         if (mine !== token) return;
         setStatus(`Couldn't fetch reach (${e.message}). Check the key / daily limit.`, "error");
@@ -496,68 +469,154 @@
       redraw();
     }
 
+    async function recomputeAll() {
+      if (!keyPool().length) return;
+      for (const p of POINTS) await recompute(p);   // sequential: avoids the redraw race
+    }
+
+    // --- Drawing ------------------------------------------------------
     function safeOp(fn, x, y) { try { return fn(x, y); } catch (e) { return null; } }
-    function draw(feature, color, fillOpacity) {
+    function drawArea(feature, color, opts) {
       if (!feature) return;
+      const o = opts || {};
       L.geoJSON(feature, {
-        style: { color, weight: 1.5, fillColor: color, fillOpacity, opacity: 0.6 }
+        style: {
+          color: o.stroke || color,
+          weight: o.weight == null ? 1.5 : o.weight,
+          fillColor: color,
+          fillOpacity: o.fill == null ? 0.3 : o.fill,
+          opacity: o.opacity == null ? 0.85 : o.opacity,
+          dashArray: o.dash || null
+        }
       }).addTo(polygonLayer);
     }
 
     function redraw() {
       polygonLayer.clearLayers();
-      const a = P.a.iso, b = P.b.iso;
-      if (!a && !b) { setStatus("Drop a pin to see where you can get to."); return; }
+      const ready = POINTS.filter((p) => p.iso);
+      if (!ready.length) { setStatus("Drop a pin to see where you can get to."); return; }
 
-      const overlap = (a && b) ? safeOp(turf.intersect, a, b) : null;
-      const aOnly = (a && b) ? (safeOp(turf.difference, a, b) || a) : a;
-      const bOnly = (a && b) ? (safeOp(turf.difference, b, a) || b) : b;
+      // One person: their reachable area IS the answer, so fill it.
+      if (POINTS.length === 1) {
+        drawArea(ready[0].iso, ready[0].color, { fill: 0.32, weight: 2 });
+        setStatus("That's everywhere you can get to. Add people to find a zone that works for everyone.");
+        return;
+      }
 
-      draw(aOnly, COLORS.a, 0.30);
-      draw(bOnly, COLORS.b, 0.30);
-      draw(overlap, COLORS.overlap, 0.55);
+      // Several people: draw each person's reach as a coloured OUTLINE only (no
+      // fill), so 5 areas can't muddy into each other. The shared zone is then
+      // the only FILLED region, so it's unmistakable.
+      ready.forEach((p) => drawArea(p.iso, p.color, { fill: 0, weight: 2, dash: "5 4" }));
 
-      if (a && b) {
-        setStatus(overlap ? "💚 The green zone is your middle ground — reachable by both."
-                          : "No middle ground yet — give yourselves a bit more time.");
+      // Green overlap = intersection of EVERYONE's area (needs all pins ready).
+      let overlap = null;
+      if (ready.length === POINTS.length) {
+        overlap = ready[0].iso;
+        for (let i = 1; i < ready.length && overlap; i++) overlap = safeOp(turf.intersect, overlap, ready[i].iso);
+        drawArea(overlap, OVERLAP, { fill: 0.6, weight: 3, stroke: "#047857", opacity: 1 });
+      }
+
+      if (ready.length < POINTS.length) {
+        setStatus("Mapping everyone's reach…", "busy");
       } else {
-        setStatus("Now drop the other pin to find your middle ground.");
+        setStatus(overlap
+          ? "💚 The solid green zone works for everyone — reachable by all."
+          : "No shared zone yet — give people a bit more time, or drop a pin closer.");
       }
     }
 
-    // --- Controls -----------------------------------------------------
-    // Non-linear time stops: fine (5-min) where it matters perceptually, coarse
-    // (10-min) up high where 5 min barely registers. The slider is an index into
-    // this array, so spacing is even on screen but the values aren't.
-    const STOPS = [15, 20, 25, 30, 40, 50, 60];
-    function wireRange(key, rangeClass, valClass) {
-      const range = document.querySelector(rangeClass);
-      const val = document.querySelector(valClass);
+    // --- Person cards (built dynamically) -----------------------------
+    function buildCard(point) {
+      const card = document.createElement("div");
+      card.className = "person";
+      card.style.setProperty("--c", point.color);
+      card.style.setProperty("--soft", point.soft);
+      card.innerHTML = `
+        <div class="row">
+          <span class="name"><span class="dot"></span> <span class="pname">Person</span></span>
+          <span class="rgt">
+            <span class="pill"><span class="val">15</span> min</span>
+            <button class="remove" type="button" title="Remove" aria-label="Remove">&times;</button>
+          </span>
+        </div>
+        <input type="range" min="0" max="6" step="1" value="0" />
+        <div class="modes">
+          <button data-mode="approximated_transit" aria-pressed="true">${TRANSIT_SVG} Transit</button>
+          <button data-mode="bicycle" aria-pressed="false">${BIKE_SVG} Bike</button>
+        </div>`;
+
+      const range = card.querySelector('input[type="range"]');
+      const val = card.querySelector(".val");
       const show = () => { val.textContent = STOPS[+range.value]; };
       range.addEventListener("input", show);
-      range.addEventListener("change", () => { P[key].minutes = STOPS[+range.value]; recompute(key); });
-      show();   // sync the label with the initial index
-    }
-    wireRange("a", ".rangeA", ".valA");
-    wireRange("b", ".rangeB", ".valB");
+      range.addEventListener("change", () => { point.minutes = STOPS[+range.value]; recompute(point); });
+      show();
 
-    // Per-person travel-mode toggle (transit / bike).
-    document.querySelectorAll(".modes").forEach((group) => {
-      const key = group.dataset.key;
-      group.querySelectorAll("button").forEach((btn) => {
+      card.querySelectorAll(".modes button").forEach((btn) => {
         btn.addEventListener("click", () => {
-          if (P[key].mode === btn.dataset.mode) return;
-          P[key].mode = btn.dataset.mode;
-          group.querySelectorAll("button").forEach((b) =>
-            b.setAttribute("aria-pressed", String(b === btn)));
-          recompute(key);
+          if (point.mode === btn.dataset.mode) return;
+          point.mode = btn.dataset.mode;
+          card.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+          recompute(point);
         });
       });
+
+      card.querySelector(".remove").addEventListener("click", () => removePoint(point));
+
+      point.el = card;
+      peopleEl.appendChild(card);
+    }
+
+    // Re-number names + tooltips, and toggle add/remove affordances.
+    function refreshControls() {
+      POINTS.forEach((p, i) => {
+        p.el.querySelector(".pname").textContent = `Person ${i + 1}`;
+        if (p.marker) p.marker.setTooltipContent(`Person ${i + 1}`);
+        p.el.querySelector(".remove").hidden = POINTS.length <= 1;
+      });
+      addBtn.hidden = POINTS.length >= MAX_POINTS;
+    }
+
+    function addPoint(at) {
+      if (POINTS.length >= MAX_POINTS) return;
+      const slot = POINTS.length;
+      const defIndex = takeColorDef();
+      const def = POINT_DEFS[defIndex];
+      const c = at || map.getCenter();
+      const off = OFFSETS[slot] || [0, 0];
+      const pos = [c.lat + off[0], c.lng + off[1]];
+
+      const point = {
+        defIndex, color: def.color, soft: def.soft,
+        minutes: 15, mode: "approximated_transit", iso: null, marker: null, el: null
+      };
+      point.marker = L.marker(pos, { draggable: true, icon: makeIcon(point.color) }).addTo(map);
+      point.marker.bindTooltip(`Person ${slot + 1}`, { className: "pin-tip", direction: "top", offset: [0, -22] });
+      point.marker.on("dragend", () => recompute(point));
+
+      POINTS.push(point);
+      buildCard(point);
+      refreshControls();
+      recompute(point);
+    }
+
+    function removePoint(point) {
+      if (POINTS.length <= 1) return;
+      map.removeLayer(point.marker);
+      point.el.remove();
+      usedColors.delete(point.defIndex);
+      POINTS.splice(POINTS.indexOf(point), 1);
+      refreshControls();
+      track("remove_person", { people: POINTS.length });
+      redraw();
+    }
+
+    addBtn.addEventListener("click", () => {
+      addPoint();
+      track("add_person", { people: POINTS.length });
     });
 
     // --- City picker --------------------------------------------------
-    // Cities grouped by country (alphabetical), rendered as <optgroup>s with a
-    // flag. Add a city by dropping it under its country, or add a new country.
     const COUNTRIES = [
       { country: "Belgium", flag: "🇧🇪", cities: [
         { name: "Brussels", lat: 50.8503, lon: 4.3517 },
@@ -589,7 +648,6 @@
         { name: "London", lat: 51.5074, lon: -0.1278 },
       ] },
     ];
-    // Flat list for lookups by name.
     const CITIES = COUNTRIES.flatMap((g) => g.cities);
 
     const citySelect = document.getElementById("citySelect");
@@ -606,20 +664,15 @@
     });
     citySelect.value = "Berlin";
 
-    async function recomputeBoth() {
-      if (!keyPool().length) return;
-      await recompute("a");
-      await recompute("b");
-    }
-
-    // Move both pins near a city centre (offset so they're distinct), recentre,
-    // then recompute. From here you drag each pin to the real job.
+    // Spread all current pins around the city centre, recentre, recompute.
     function goToCity(lat, lon, label) {
-      P.a.marker.setLatLng([lat + 0.012, lon - 0.020]);
-      P.b.marker.setLatLng([lat - 0.012, lon + 0.020]);
+      POINTS.forEach((p, i) => {
+        const off = OFFSETS[i] || [0, 0];
+        p.marker.setLatLng([lat + off[0], lon + off[1]]);
+      });
       map.setView([lat, lon], 12);
-      setStatus(`${label} — drag each pin to a job.`);
-      recomputeBoth();
+      setStatus(`${label} — drag each pin to a place.`);
+      recomputeAll();
     }
 
     citySelect.addEventListener("change", () => {
@@ -637,34 +690,26 @@
       );
     });
 
-    // Mobile only (handle/title are inert on desktop): fold the sheet to reveal
-    // the full map. Toggling the class does nothing on desktop — the collapse
-    // styles live inside the mobile media query.
+    // Mobile: fold the sheet down to just the title.
     const panel = document.querySelector(".panel");
     const toggleSheet = () => panel.classList.toggle("collapsed");
     document.querySelector(".sheet-handle").addEventListener("click", toggleSheet);
     document.querySelector(".brand").addEventListener("click", toggleSheet);
 
-    // Prefer a key you typed (saved locally); otherwise the deploy-injected one.
+    // Key resolution for the hidden field + ?key= local-testing fallback.
     apiKeyEl.value = localStorage.getItem(KEY_STORE) || HARDCODED_KEY || injectedKey;
-
-    // No visible key UI. The key comes from the deploy-injected value or local
-    // storage; ?key=... in the URL is a silent fallback to set one. (Real
-    // protection is the Geoapify domain restriction, not hiding the box.)
     const urlKey = new URLSearchParams(location.search).get("key");
     if (urlKey) {
       localStorage.setItem(KEY_STORE, urlKey.trim());
       apiKeyEl.value = urlKey.trim();
     }
 
+    // Start with one person; compute its reach so the map isn't blank.
+    addPoint();
     setStatus("Drop a pin to see where you can get to.");
-
-    // Compute both reaches on load (pins start at the default jobs), so the map
-    // isn't blank. Sequential awaits avoid the single-token redraw race.
     (async () => {
       if (!keyPool().length) return;
-      await recompute("a");
-      await recompute("b");
+      await recomputeAll();
     })();
   </script>
 </body>
