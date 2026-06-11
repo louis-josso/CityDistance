@@ -93,6 +93,16 @@
     .toplink { font-size: 10.5px; margin: 0 0 16px; }
     .toplink a { color: var(--a); text-decoration: none; font-weight: 500; }
     .toplink a:hover { text-decoration: underline; }
+    .sharebtn {
+      width: 100%; padding: 9px; margin: 2px 0 2px;
+      border: 1px solid var(--line); border-radius: 10px; background: #fff;
+      color: var(--a); font-family: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .12s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .sharebtn svg { width: 14px; height: 14px; }
+    .sharebtn:hover { background: var(--a-soft); border-color: var(--a); }
+    .sharebtn.copied { color: var(--overlap); border-color: var(--overlap); background: #ecfdf5; }
 
     /* ---- Person cards ---- */
     .person {
@@ -301,6 +311,11 @@
       <small>Drop the orange pin on their job.</small>
     </div>
     </div>
+
+    <button class="sharebtn" id="shareBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+      Copy link to this map
+    </button>
 
     <div class="field" id="keyField" style="display:none">
       <label>Geoapify API key</label>
@@ -555,6 +570,77 @@
       });
     });
 
+    // --- Shareable link -----------------------------------------------
+    // Pin positions + time + mode are encoded in the URL hash (kept out of the
+    // query string so it never carries the ?key=). Opening such a link restores
+    // the exact map. Mode is shortened to t (transit) / b (bike).
+    const modeCode = (m) => (m === "bicycle" ? "b" : "t");
+    const codeMode = (c) => (c === "b" ? "bicycle" : "approximated_transit");
+
+    function shareURL() {
+      const seg = (key) => {
+        const ll = P[key].marker.getLatLng();
+        return `${ll.lat.toFixed(5)},${ll.lng.toFixed(5)},${P[key].minutes},${modeCode(P[key].mode)}`;
+      };
+      return location.origin + location.pathname + `#a=${seg("a")}&b=${seg("b")}`;
+    }
+
+    // Push the restored state into the sliders + mode buttons.
+    function syncControls() {
+      [["a", ".rangeA", ".valA"], ["b", ".rangeB", ".valB"]].forEach(([key, rc, vc]) => {
+        const idx = STOPS.indexOf(P[key].minutes);
+        if (idx >= 0) document.querySelector(rc).value = idx;
+        document.querySelector(vc).textContent = P[key].minutes;
+        document.querySelectorAll(`.modes[data-key="${key}"] button`).forEach((b) =>
+          b.setAttribute("aria-pressed", String(b.dataset.mode === P[key].mode)));
+      });
+    }
+
+    function restoreFromHash() {
+      const h = location.hash.replace(/^#/, "");
+      if (!h) return false;
+      const params = new URLSearchParams(h);
+      let any = false;
+      ["a", "b"].forEach((key) => {
+        const v = params.get(key);
+        if (!v) return;
+        const [lat, lng, min, mode] = v.split(",");
+        const la = parseFloat(lat), lo = parseFloat(lng);
+        if (isNaN(la) || isNaN(lo)) return;
+        P[key].marker.setLatLng([la, lo]);
+        const m = parseInt(min, 10);
+        if (STOPS.includes(m)) P[key].minutes = m;
+        if (mode) P[key].mode = codeMode(mode);
+        any = true;
+      });
+      if (any) {
+        syncControls();
+        const grp = L.featureGroup([P.a.marker, P.b.marker]);
+        map.fitBounds(grp.getBounds().pad(0.35));
+      }
+      return any;
+    }
+
+    const shareBtn = document.getElementById("shareBtn");
+    shareBtn.addEventListener("click", async () => {
+      const url = shareURL();
+      const label = shareBtn.querySelector("svg").outerHTML;
+      const done = (msg, ok) => {
+        shareBtn.innerHTML = label + " " + msg;
+        shareBtn.classList.toggle("copied", ok);
+        setTimeout(() => { shareBtn.innerHTML = label + " Copy link to this map"; shareBtn.classList.remove("copied"); }, 1900);
+      };
+      try {
+        await navigator.clipboard.writeText(url);
+        done("Link copied!", true);
+        track("share_link", {});
+      } catch (e) {
+        // Clipboard blocked (e.g. file://) — drop the link into the URL bar instead.
+        location.hash = url.split("#")[1] || "";
+        done("Link is in the address bar", false);
+      }
+    });
+
     // --- City picker --------------------------------------------------
     // Cities grouped by country (alphabetical), rendered as <optgroup>s with a
     // flag. Add a city by dropping it under its country, or add a new country.
@@ -659,8 +745,11 @@
 
     setStatus("Drop a pin to see where you can get to.");
 
-    // Compute both reaches on load (pins start at the default jobs), so the map
-    // isn't blank. Sequential awaits avoid the single-token redraw race.
+    // If the URL carries a shared map (#a=…&b=…), restore pins/time/mode first.
+    restoreFromHash();
+
+    // Compute both reaches on load (pins at default or restored positions), so
+    // the map isn't blank. Sequential awaits avoid the single-token redraw race.
     (async () => {
       if (!keyPool().length) return;
       await recompute("a");

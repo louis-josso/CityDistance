@@ -153,6 +153,17 @@
     .addbtn:hover { border-color: var(--a); color: var(--a); }
     .addbtn[hidden] { display: none; }
 
+    .sharebtn {
+      width: 100%; padding: 9px; margin: 2px 0;
+      border: 1px solid var(--line); border-radius: 10px; background: #fff;
+      color: var(--a); font-family: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .12s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .sharebtn svg { width: 14px; height: 14px; }
+    .sharebtn:hover { background: var(--a-soft); border-color: var(--a); }
+    .sharebtn.copied { color: var(--overlap); border-color: var(--overlap); background: #ecfdf5; }
+
     /* ---- Key field ---- */
     .field { margin-top: 6px; }
     .field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
@@ -306,6 +317,11 @@
     <button class="addbtn" id="addBtn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       Add a person
+    </button>
+
+    <button class="sharebtn" id="shareBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+      Copy link to this map
     </button>
 
     <div class="field" id="keyField" style="display:none">
@@ -666,18 +682,28 @@
       addBtn.hidden = POINTS.length >= MAX_POINTS;
     }
 
-    function addPoint(at) {
+    // opts: { at, lat, lng, minutes, mode, compute } — lat/lng + minutes/mode are
+    // used when restoring a shared link; otherwise a pin is dropped near centre.
+    function addPoint(opts) {
+      opts = opts || {};
       if (POINTS.length >= MAX_POINTS) return;
       const slot = POINTS.length;
       const defIndex = takeColorDef();
       const def = POINT_DEFS[defIndex];
-      const c = at || map.getCenter();
-      const off = OFFSETS[slot] || [0, 0];
-      const pos = [c.lat + off[0], c.lng + off[1]];
+      let pos;
+      if (opts.lat != null && opts.lng != null) {
+        pos = [opts.lat, opts.lng];
+      } else {
+        const c = opts.at || map.getCenter();
+        const off = OFFSETS[slot] || [0, 0];
+        pos = [c.lat + off[0], c.lng + off[1]];
+      }
 
       const point = {
         defIndex, color: def.color, soft: def.soft,
-        minutes: 15, mode: "approximated_transit", iso: null, marker: null, el: null
+        minutes: STOPS.includes(opts.minutes) ? opts.minutes : 15,
+        mode: opts.mode || "approximated_transit",
+        iso: null, marker: null, el: null
       };
       point.marker = L.marker(pos, { draggable: true, icon: makeIcon(point.color) }).addTo(map);
       point.marker.bindTooltip(`Person ${slot + 1}`, { className: "pin-tip", direction: "top", offset: [0, -22] });
@@ -685,9 +711,22 @@
 
       POINTS.push(point);
       buildCard(point);
+      syncCard(point);      // reflect minutes/mode in the controls (matters on restore)
       setExpanded(point);   // open the new card (mobile); inert on desktop
       refreshControls();
-      recompute(point);
+      if (opts.compute !== false) recompute(point);
+    }
+
+    // Push a point's minutes/mode into its card controls.
+    function syncCard(point) {
+      const card = point.el;
+      const idx = STOPS.indexOf(point.minutes);
+      const range = card.querySelector('input[type="range"]');
+      if (idx >= 0) range.value = idx;
+      card.querySelector(".val").textContent = point.minutes;
+      card.querySelectorAll(".modes button").forEach((b) =>
+        b.setAttribute("aria-pressed", String(b.dataset.mode === point.mode)));
+      card.querySelector(".modemini").textContent = point.mode === "bicycle" ? "🚲" : "🚆";
     }
 
     function removePoint(point) {
@@ -794,8 +833,58 @@
       apiKeyEl.value = urlKey.trim();
     }
 
-    // Start with one person; compute its reach so the map isn't blank.
-    addPoint();
+    // --- Shareable link -----------------------------------------------
+    // Every person's pin + time + mode is encoded in the URL hash (out of the
+    // query string, so it never carries the ?key=). Opening the link rebuilds
+    // the group. Segments are pipe-separated: #p=lat,lng,min,mode|lat,lng,…
+    const modeCode = (m) => (m === "bicycle" ? "b" : "t");
+    const codeMode = (c) => (c === "b" ? "bicycle" : "approximated_transit");
+
+    function shareURL() {
+      const segs = POINTS.map((p) => {
+        const ll = p.marker.getLatLng();
+        return `${ll.lat.toFixed(5)},${ll.lng.toFixed(5)},${p.minutes},${modeCode(p.mode)}`;
+      });
+      return location.origin + location.pathname + "#p=" + segs.join("|");
+    }
+
+    function restoreFromHash() {
+      const h = location.hash.replace(/^#/, "");
+      if (!h) return false;
+      const pstr = new URLSearchParams(h).get("p");
+      if (!pstr) return false;
+      const parsed = pstr.split("|").slice(0, MAX_POINTS).map((s) => {
+        const a = s.split(",");
+        return { lat: parseFloat(a[0]), lng: parseFloat(a[1]), minutes: parseInt(a[2], 10), mode: codeMode(a[3]) };
+      }).filter((o) => !isNaN(o.lat) && !isNaN(o.lng));
+      if (!parsed.length) return false;
+      parsed.forEach((o) => addPoint({ lat: o.lat, lng: o.lng, minutes: o.minutes, mode: o.mode, compute: false }));
+      const grp = L.featureGroup(POINTS.map((p) => p.marker));
+      map.fitBounds(grp.getBounds().pad(0.35));
+      return true;
+    }
+
+    const shareBtn = document.getElementById("shareBtn");
+    shareBtn.addEventListener("click", async () => {
+      const url = shareURL();
+      const icon = shareBtn.querySelector("svg").outerHTML;
+      const done = (msg, ok) => {
+        shareBtn.innerHTML = icon + " " + msg;
+        shareBtn.classList.toggle("copied", ok);
+        setTimeout(() => { shareBtn.innerHTML = icon + " Copy link to this map"; shareBtn.classList.remove("copied"); }, 1900);
+      };
+      try {
+        await navigator.clipboard.writeText(url);
+        done("Link copied!", true);
+        track("share_link", { people: POINTS.length });
+      } catch (e) {
+        location.hash = url.split("#")[1] || "";
+        done("Link is in the address bar", false);
+      }
+    });
+
+    // Restore a shared map (#p=…) if present; otherwise start with one person.
+    if (!restoreFromHash()) addPoint({ compute: false });
     setStatus("Drop a pin to see where you can get to.");
     (async () => {
       if (!keyPool().length) return;
