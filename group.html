@@ -346,6 +346,7 @@
 
     const OVERLAP = "#10b981";
     const KEY_STORE = "geoapify_key";
+    const CITY_STORE = "meet_city";   // last-picked city, shared across both pages
 
     // Up to 5 people. Each slot has a stable colour, taken on add, freed on
     // remove, so an existing pin never changes colour when someone else leaves.
@@ -794,19 +795,19 @@
     citySelect.value = "Berlin";
 
     // Spread all current pins around the city centre, recentre, recompute.
-    function goToCity(lat, lon, label) {
+    function goToCity(lat, lon, label, skipCompute) {
       POINTS.forEach((p, i) => {
         const off = OFFSETS[i] || [0, 0];
         p.marker.setLatLng([lat + off[0], lon + off[1]]);
       });
       map.setView([lat, lon], 12);
       setStatus(`${label} — drag each pin to a place.`);
-      recomputeAll();
+      if (!skipCompute) recomputeAll();
     }
 
     citySelect.addEventListener("change", () => {
       const c = CITIES.find((x) => x.name === citySelect.value);
-      if (c) { track("select_city", { city: c.name }); goToCity(c.lat, c.lon, c.name); }
+      if (c) { localStorage.setItem(CITY_STORE, c.name); track("select_city", { city: c.name }); goToCity(c.lat, c.lon, c.name); }
     });
 
     locBtn.addEventListener("click", () => {
@@ -883,8 +884,13 @@
       }
     });
 
-    // Restore a shared map (#p=…) if present; otherwise start with one person.
-    if (!restoreFromHash()) addPoint({ compute: false });
+    // Restore a shared map (#p=…) if present; otherwise start with one person
+    // and keep the city last picked on the other page.
+    if (!restoreFromHash()) {
+      addPoint({ compute: false });
+      const savedCity = CITIES.find((x) => x.name === localStorage.getItem(CITY_STORE));
+      if (savedCity) { citySelect.value = savedCity.name; goToCity(savedCity.lat, savedCity.lon, savedCity.name, true); }
+    }
     setStatus("Drop a pin to see where you can get to.");
     (async () => {
       if (!keyPool().length) return;

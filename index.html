@@ -339,6 +339,7 @@
 
     const COLORS = { a: "#2563eb", b: "#f97316", overlap: "#10b981" };
     const KEY_STORE = "geoapify_key";
+    const CITY_STORE = "meet_city";   // last-picked city, shared across both pages
 
     // --- Analytics (Google Analytics 4) -------------------------------
     // Paste your GA4 Measurement ID (looks like "G-XXXXXXXXXX"). Left as the
@@ -700,17 +701,17 @@
 
     // Move both pins near a city centre (offset so they're distinct), recentre,
     // then recompute. From here you drag each pin to the real job.
-    function goToCity(lat, lon, label) {
+    function goToCity(lat, lon, label, skipCompute) {
       P.a.marker.setLatLng([lat + 0.012, lon - 0.020]);
       P.b.marker.setLatLng([lat - 0.012, lon + 0.020]);
       map.setView([lat, lon], 12);
       setStatus(`${label} — drag each pin to a job.`);
-      recomputeBoth();
+      if (!skipCompute) recomputeBoth();
     }
 
     citySelect.addEventListener("change", () => {
       const c = CITIES.find((x) => x.name === citySelect.value);
-      if (c) { track("select_city", { city: c.name }); goToCity(c.lat, c.lon, c.name); }
+      if (c) { localStorage.setItem(CITY_STORE, c.name); track("select_city", { city: c.name }); goToCity(c.lat, c.lon, c.name); }
     });
 
     locBtn.addEventListener("click", () => {
@@ -746,10 +747,16 @@
     setStatus("Drop a pin to see where you can get to.");
 
     // If the URL carries a shared map (#a=…&b=…), restore pins/time/mode first.
-    restoreFromHash();
+    const restored = restoreFromHash();
 
-    // Compute both reaches on load (pins at default or restored positions), so
-    // the map isn't blank. Sequential awaits avoid the single-token redraw race.
+    // Otherwise keep the city last picked (carried across both pages).
+    if (!restored) {
+      const savedCity = CITIES.find((x) => x.name === localStorage.getItem(CITY_STORE));
+      if (savedCity) { citySelect.value = savedCity.name; goToCity(savedCity.lat, savedCity.lon, savedCity.name, true); }
+    }
+
+    // Compute both reaches on load (pins at default / restored / saved-city
+    // positions). Sequential awaits avoid the single-token redraw race.
     (async () => {
       if (!keyPool().length) return;
       await recompute("a");
